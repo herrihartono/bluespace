@@ -71,20 +71,23 @@ export default function PostCard({ post }: PostCardProps) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-gray-900 text-sm">{post.authorName}</span>
-              <span className="text-gray-400 text-sm">@{post.authorUsername}</span>
-              <span className="text-gray-300 text-xs">·</span>
-              <span className="text-gray-400 text-xs">
-                {formatDistanceToNow(post.createdAt, { addSuffix: true })}
-              </span>
-              <span className="text-gray-300 text-xs">·</span>
-              {post.visibility === "global" ? (
-                <HiGlobeAlt className="w-3.5 h-3.5 text-green-500" title="Global" />
-              ) : (
-                <HiUserCircle className="w-3.5 h-3.5 text-blue-400" title="Friends only" />
-              )}
+          <div className="flex items-start justify-between gap-1">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-gray-900 text-sm truncate max-w-[120px] sm:max-w-none">{post.authorName}</span>
+                <span className="text-gray-400 text-xs truncate">@{post.authorUsername}</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-gray-400 text-[11px]">
+                  {formatDistanceToNow(post.createdAt, { addSuffix: true })}
+                </span>
+                <span className="text-gray-300 text-[11px]">·</span>
+                {post.visibility === "global" ? (
+                  <HiGlobeAlt className="w-3 h-3 text-green-500" />
+                ) : (
+                  <HiUserCircle className="w-3 h-3 text-blue-400" />
+                )}
+              </div>
             </div>
 
             {user?.uid === post.authorId && (

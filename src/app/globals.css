@@ -38,3 +38,18 @@ textarea:focus,
 select:focus {
   outline: none;
 }
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+@supports (height: 100dvh) {
+  .h-dvh {
+    height: 100dvh;
+  }
+}
+
+* {
+  -webkit-overflow-scrolling: touch;
+}

@@ -107,10 +107,10 @@ export default function ChatListPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-gray-900 text-sm">{display.name}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-gray-900 text-sm truncate">{display.name}</span>
                     {chat.updatedAt && (
-                      <span className="text-xs text-gray-400">
+                      <span className="text-[11px] text-gray-400 shrink-0">
                         {formatDistanceToNow(chat.updatedAt, { addSuffix: true })}
                       </span>
                     )}
@@ -129,8 +129,8 @@ export default function ChatListPage() {
       )}
 
       {showCreateGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl safe-area-bottom">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">New Group Chat</h3>
               <button onClick={() => setShowCreateGroup(false)} className="p-1 hover:bg-gray-100 rounded-full">

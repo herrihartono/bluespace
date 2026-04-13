@@ -23,29 +23,29 @@ export default function ProfilePage() {
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-2xl border border-blue-50 overflow-hidden">
-        <div className="h-32 bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400" />
+        <div className="h-28 sm:h-32 bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400" />
 
-        <div className="px-6 pb-6">
-          <div className="-mt-14 mb-4">
-            <div className="w-28 h-28 rounded-full border-4 border-white bg-blue-100 overflow-hidden shadow-lg">
+        <div className="px-4 sm:px-6 pb-5">
+          <div className="-mt-12 sm:-mt-14 mb-3">
+            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-white bg-blue-100 overflow-hidden shadow-lg">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-blue-600 text-3xl font-bold">
+                <div className="w-full h-full flex items-center justify-center text-blue-600 text-2xl sm:text-3xl font-bold">
                   {user.displayName?.[0]?.toUpperCase()}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{user.displayName}</h1>
-              <p className="text-gray-500">@{user.username}</p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{user.displayName}</h1>
+              <p className="text-gray-500 text-sm">@{user.username}</p>
               {user.division && (
                 <div className="flex items-center gap-1.5 mt-2 text-sm text-gray-500">
-                  <HiBriefcase className="w-4 h-4" />
-                  <span>{user.division}</span>
+                  <HiBriefcase className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{user.division}</span>
                 </div>
               )}
               {user.bio && (
@@ -55,7 +55,7 @@ export default function ProfilePage() {
 
             <Link
               href="/profile/edit"
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-full hover:bg-blue-100 transition-colors"
+              className="self-start flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-full hover:bg-blue-100 transition-colors shrink-0"
             >
               <HiPencilSquare className="w-4 h-4" />
               Edit
@@ -67,9 +67,9 @@ export default function ProfilePage() {
       <div className="bg-white rounded-2xl border border-blue-50 p-4">
         <h3 className="font-semibold text-gray-800 mb-3">Account</h3>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between py-2">
+          <div className="flex flex-col sm:flex-row sm:justify-between py-2 gap-0.5">
             <span className="text-gray-500">Email</span>
-            <span className="text-gray-800">{user.email}</span>
+            <span className="text-gray-800 text-xs sm:text-sm break-all">{user.email}</span>
           </div>
           <div className="flex justify-between py-2">
             <span className="text-gray-500">Username</span>

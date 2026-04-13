@@ -69,7 +69,7 @@ export default function ChatRoomPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100dvh-8rem)]">
       <div className="flex items-center gap-3 pb-4 border-b border-blue-50">
         <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-blue-50 transition-colors">
           <HiArrowLeft className="w-5 h-5 text-gray-600" />

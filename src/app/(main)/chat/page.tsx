@@ -129,8 +129,12 @@ export default function ChatListPage() {
       )}
 
       {showCreateGroup && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl safe-area-bottom">
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowCreateGroup(false); }}
+        >
+          <div className="min-h-full flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">New Group Chat</h3>
               <button onClick={() => setShowCreateGroup(false)} className="p-1 hover:bg-gray-100 rounded-full">
@@ -188,6 +192,7 @@ export default function ChatListPage() {
             >
               Create Group
             </button>
+          </div>
           </div>
         </div>
       )}

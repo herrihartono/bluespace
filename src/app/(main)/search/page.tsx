@@ -142,31 +142,35 @@ export default function SearchPage() {
       </div>
 
       {noteModal && modalTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-6 w-full sm:max-w-sm sm:mx-4 shadow-xl safe-area-bottom">
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Friend</h3>
-            <p className="text-sm text-gray-500 mb-4">Send a note with your request to @{modalTarget.username}</p>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Hi! I'd like to connect..."
-              rows={3}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all mb-4"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setNoteModal(null); setNote(""); }}
-                className="flex-1 py-3 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleSendRequest(modalTarget)}
-                className="flex-1 py-3 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
-              >
-                Send Request
-              </button>
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) { setNoteModal(null); setNote(""); } }}
+        >
+          <div className="min-h-full flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Friend</h3>
+              <p className="text-sm text-gray-500 mb-4">Send a note with your request to @{modalTarget.username}</p>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Hi! I'd like to connect..."
+                rows={3}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all mb-4"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setNoteModal(null); setNote(""); }}
+                  className="flex-1 py-3 text-sm font-medium text-gray-600 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSendRequest(modalTarget)}
+                  className="flex-1 py-3 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+                >
+                  Send Request
+                </button>
+              </div>
             </div>
           </div>
         </div>

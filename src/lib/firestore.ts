@@ -14,9 +14,10 @@ import {
   addDoc,
   arrayUnion,
   arrayRemove,
+  increment,
 } from "firebase/firestore";
 import { getFirebaseDb } from "./firebase";
-import { UserProfile, Post, FriendRequest, Friend, Chat, Message } from "@/types";
+import { UserProfile, Post, FriendRequest, Friend, Chat, Message, Comment } from "@/types";
 
 function snapshotErrorHandler(context: string) {
   return (error: Error) => {
@@ -171,15 +172,49 @@ export function subscribeToMessages(chatId: string, callback: (messages: Message
 }
 
 export async function findPrivateChat(userId: string, friendId: string): Promise<Chat | null> {
+  try {
+    const q = query(
+      collection(getFirebaseDb(), "chats"),
+      where("type", "==", "private"),
+      where("members", "array-contains", userId)
+    );
+    const snap = await getDocs(q);
+    const chat = snap.docs.find((d) => {
+      const data = d.data() as Chat;
+      return data.members.includes(friendId);
+    });
+    return chat ? ({ ...chat.data(), id: chat.id } as Chat) : null;
+  } catch (err) {
+    console.warn("[Firestore] findPrivateChat error:", err);
+    return null;
+  }
+}
+
+// ─── Comment Operations ───
+
+export async function addComment(comment: Omit<Comment, "id">) {
+  const ref = await addDoc(collection(getFirebaseDb(), "comments"), comment);
+  await updateDoc(doc(getFirebaseDb(), "posts", comment.postId), {
+    commentCount: increment(1),
+  }).catch(() => {});
+  return ref.id;
+}
+
+export function subscribeToComments(postId: string, callback: (comments: Comment[]) => void) {
   const q = query(
-    collection(getFirebaseDb(), "chats"),
-    where("type", "==", "private"),
-    where("members", "array-contains", userId)
+    collection(getFirebaseDb(), "comments"),
+    where("postId", "==", postId),
+    orderBy("createdAt", "asc")
   );
-  const snap = await getDocs(q);
-  const chat = snap.docs.find((d) => {
-    const data = d.data() as Chat;
-    return data.members.includes(friendId);
-  });
-  return chat ? ({ ...chat.data(), id: chat.id } as Chat) : null;
+  return onSnapshot(q, (snap) => {
+    const comments = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Comment));
+    callback(comments);
+  }, snapshotErrorHandler("comments"));
+}
+
+export async function deleteComment(commentId: string, postId: string) {
+  await deleteDoc(doc(getFirebaseDb(), "comments", commentId));
+  await updateDoc(doc(getFirebaseDb(), "posts", postId), {
+    commentCount: increment(-1),
+  }).catch(() => {});
 }

@@ -42,15 +42,19 @@ export default function ChatRoomPage() {
   const handleSend = async () => {
     if (!user || !text.trim()) return;
     setSending(true);
-    await sendMessage({
-      chatId,
-      senderId: user.uid,
-      senderName: user.displayName,
-      senderPhoto: user.photoURL,
-      content: text.trim(),
-      createdAt: Date.now(),
-    });
-    setText("");
+    try {
+      await sendMessage({
+        chatId,
+        senderId: user.uid,
+        senderName: user.displayName,
+        senderPhoto: user.photoURL,
+        content: text.trim(),
+        createdAt: Date.now(),
+      });
+      setText("");
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
     setSending(false);
   };
 

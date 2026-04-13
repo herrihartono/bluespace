@@ -20,6 +20,7 @@ export interface Post {
   tags: string[];
   groupTags: string[];
   likes: string[];
+  commentCount?: number;
   visibility: "global" | "friends";
   repostOf?: string;
   repostAuthorName?: string;
@@ -72,6 +73,17 @@ export interface Message {
   senderId: string;
   senderName: string;
   senderPhoto: string;
+  content: string;
+  createdAt: number;
+}
+
+export interface Comment {
+  id: string;
+  postId: string;
+  authorId: string;
+  authorName: string;
+  authorUsername: string;
+  authorPhoto: string;
   content: string;
   createdAt: number;
 }

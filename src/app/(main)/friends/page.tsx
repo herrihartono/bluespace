@@ -65,22 +65,26 @@ export default function FriendsPage() {
 
   const handleChat = async (friend: Friend) => {
     if (!user) return;
-    let chat = await findPrivateChat(user.uid, friend.friendId);
-    if (!chat) {
-      const id = await createChat({
-        type: "private",
-        name: "",
-        members: [user.uid, friend.friendId],
-        memberNames: { [user.uid]: user.displayName, [friend.friendId]: friend.friendName },
-        memberPhotos: { [user.uid]: user.photoURL, [friend.friendId]: friend.friendPhoto },
-        lastMessage: "",
-        lastMessageBy: "",
-        updatedAt: Date.now(),
-        createdBy: user.uid,
-      });
-      chat = { id } as any;
+    try {
+      let chat = await findPrivateChat(user.uid, friend.friendId);
+      if (!chat) {
+        const id = await createChat({
+          type: "private",
+          name: "",
+          members: [user.uid, friend.friendId],
+          memberNames: { [user.uid]: user.displayName, [friend.friendId]: friend.friendName },
+          memberPhotos: { [user.uid]: user.photoURL, [friend.friendId]: friend.friendPhoto },
+          lastMessage: "",
+          lastMessageBy: "",
+          updatedAt: Date.now(),
+          createdBy: user.uid,
+        });
+        chat = { id } as any;
+      }
+      router.push(`/chat/${chat!.id}`);
+    } catch (err) {
+      console.error("Failed to open chat:", err);
     }
-    router.push(`/chat/${chat!.id}`);
   };
 
   return (

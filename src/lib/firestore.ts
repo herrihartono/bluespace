@@ -252,14 +252,12 @@ export function subscribeToMessages(
   chatId: string,
   callback: (messages: Message[]) => void,
   onError?: (err: Error) => void,
-  msgLimit = 200,
 ) {
-  // No orderBy to avoid requiring a composite index that may not be deployed.
-  // We sort client-side after receiving docs.
+  // No orderBy/limit so the listener watches ALL messages for this chat and
+  // fires on every new message — fully real-time. Sort client-side instead.
   const q = query(
     collection(getFirebaseDb(), "messages"),
-    where("chatId", "==", chatId),
-    limit(msgLimit)
+    where("chatId", "==", chatId)
   );
   return onSnapshot(q, (snap) => {
     const messages = snap.docs.map((d) => {

@@ -51,16 +51,15 @@ export default function ChatRoomPage() {
   }, [chatId, user]);
 
   useEffect(() => {
-    if (accessDenied || !chat) return;
+    if (accessDenied) return;
     setMessagesError(null);
     const unsub = subscribeToMessages(
       chatId,
       setMessages,
-      (err) => setMessagesError("Failed to load messages. The database index may still be building."),
-      50,
+      () => setMessagesError("Failed to load messages."),
     );
     return () => unsub();
-  }, [chatId, accessDenied, chat]);
+  }, [chatId, accessDenied]);
 
   useEffect(() => {
     if (chat && user) {

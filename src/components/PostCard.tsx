@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Post, Comment, POST_PREVIEW_WORDS } from "@/types";
-import { toggleLike, deletePost, createPost, addComment, subscribeToComments, deleteComment, hasUserReposted } from "@/lib/firestore";
+import { Post, Comment, POST_PREVIEW_WORDS, REACTIONS } from "@/types";
+import { toggleLike, toggleReaction, deletePost, createPost, addComment, subscribeToComments, deleteComment, hasUserReposted } from "@/lib/firestore";
 import { useAuthStore } from "@/store/authStore";
 import { formatTimestamp } from "@/lib/formatTime";
 import {
@@ -130,6 +130,15 @@ export default function PostCard({ post }: PostCardProps) {
     setShowMenu(false);
   };
 
+  const handleReaction = async (emoji: string) => {
+    if (!user) return;
+    try {
+      await toggleReaction(post.id, user.uid, emoji);
+    } catch (err: any) {
+      setActionError("Failed to react"); clearError();
+    }
+  };
+
   const handleAddComment = async () => {
     if (!user || !commentText.trim()) return;
     setSendingComment(true);
@@ -187,7 +196,7 @@ export default function PostCard({ post }: PostCardProps) {
                 <span className="font-semibold text-gray-900 text-sm truncate max-w-[120px] sm:max-w-none">{post.authorName}</span>
                 <span className="text-gray-400 text-xs truncate">@{post.authorUsername}</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-gray-400 text-[11px]">
                   {formatTimestamp(post.createdAt)}
                 </span>
@@ -196,6 +205,12 @@ export default function PostCard({ post }: PostCardProps) {
                   <HiGlobeAlt className="w-3 h-3 text-green-500" />
                 ) : (
                   <HiUserCircle className="w-3 h-3 text-blue-400" />
+                )}
+                {post.tags?.length > 0 && (
+                  <span className="text-[10px] text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded font-semibold leading-none">@</span>
+                )}
+                {post.groupTags?.length > 0 && (
+                  <span className="text-[10px] text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded font-semibold leading-none">#</span>
                 )}
               </div>
             </div>
@@ -261,7 +276,28 @@ export default function PostCard({ post }: PostCardProps) {
             <div className="mt-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{actionError}</div>
           )}
 
-          <div className="flex items-center gap-6 mt-3">
+          <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+            {REACTIONS.map((emoji) => {
+              const users = post.reactions?.[emoji] || [];
+              const active = user ? users.includes(user.uid) : false;
+              return (
+                <button
+                  key={emoji}
+                  onClick={() => handleReaction(emoji)}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
+                    active
+                      ? "bg-blue-50 border-blue-300 text-blue-700"
+                      : "border-gray-100 text-gray-500 hover:border-blue-200 hover:bg-blue-50"
+                  }`}
+                >
+                  <span>{emoji}</span>
+                  {users.length > 0 && <span className="font-medium">{users.length}</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-6 mt-2">
             <button
               onClick={handleLike}
               className={`flex items-center gap-1.5 text-sm transition-colors ${

@@ -90,6 +90,14 @@ export function subscribeToPosts(callback: (posts: Post[]) => void) {
   }, snapshotErrorHandler("posts"));
 }
 
+export async function toggleReaction(postId: string, userId: string, emoji: string) {
+  const ref = doc(getFirebaseDb(), "posts", postId);
+  const snap = await getDoc(ref);
+  const existing: string[] = snap.data()?.reactions?.[emoji] || [];
+  const op = existing.includes(userId) ? arrayRemove(userId) : arrayUnion(userId);
+  await updateDoc(ref, { [`reactions.${emoji}`]: op });
+}
+
 export async function toggleLike(postId: string, userId: string, liked: boolean) {
   const ref = doc(getFirebaseDb(), "posts", postId);
   if (liked) {

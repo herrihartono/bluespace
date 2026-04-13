@@ -1,16 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { subscribeToChats } from "@/lib/firestore";
+import { Chat } from "@/types";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { HiPencilSquare, HiArrowRightOnRectangle, HiBriefcase } from "react-icons/hi2";
+import { HiPencilSquare, HiArrowRightOnRectangle, HiBriefcase, HiUserGroup } from "react-icons/hi2";
 
 export default function ProfilePage() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const router = useRouter();
+  const [groupChats, setGroupChats] = useState<Chat[]>([]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = subscribeToChats(user.uid, (chats) => {
+      setGroupChats(chats.filter((c) => c.type === "group"));
+    });
+    return () => unsub();
+  }, [user]);
 
   const handleLogout = async () => {
     await signOut(getFirebaseAuth());
@@ -80,6 +92,36 @@ export default function ProfilePage() {
             <span className="text-gray-800">{user.division || "Not set"}</span>
           </div>
         </div>
+      </div>
+
+      {/* Group Chats */}
+      <div className="bg-white rounded-2xl border border-blue-50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-gray-800">Group Chats</h3>
+          <span className="text-xs text-gray-400">{groupChats.length} group{groupChats.length !== 1 ? "s" : ""}</span>
+        </div>
+
+        {groupChats.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">Not in any group chats yet</p>
+        ) : (
+          <div className="space-y-2">
+            {groupChats.map((chat) => (
+              <Link
+                key={chat.id}
+                href={`/chat/${chat.id}`}
+                className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-blue-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                  <HiUserGroup className="w-5 h-5 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-800 truncate">{chat.name}</p>
+                  <p className="text-xs text-gray-400">{chat.members.length} members</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
 
       <button

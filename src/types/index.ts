@@ -21,6 +21,7 @@ export interface Post {
   groupTags: string[];
   likes: string[];
   commentCount?: number;
+  reactions?: Record<string, string[]>;
   visibility: "global" | "friends";
   repostOf?: string;
   repostAuthorName?: string;
@@ -93,6 +94,9 @@ export interface Comment {
   content: string;
   createdAt: number;
 }
+
+export const REACTIONS = ["👍", "❤️", "😂", "😮", "😢"] as const;
+export type ReactionEmoji = (typeof REACTIONS)[number];
 
 export const MAX_POST_WORDS = 500;
 export const MAX_POST_CHARS = 3000;

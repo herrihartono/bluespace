@@ -12,6 +12,20 @@ import { v4 as uuidv4 } from "uuid";
 const TYPING_DEBOUNCE = 2000;
 const TYPING_TIMEOUT = 5000;
 
+/** Render a message string, highlighting @Mentions in blue bold */
+function renderContent(content: string, isMe: boolean) {
+  const parts = content.split(/(@\S+)/g);
+  return parts.map((part, i) =>
+    part.startsWith("@") ? (
+      <span key={i} className={`font-semibold ${isMe ? "text-blue-200" : "text-blue-600"}`}>
+        {part}
+      </span>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
 export default function ChatRoomPage() {
   const { chatId } = useParams<{ chatId: string }>();
   const user = useAuthStore((s) => s.user);
@@ -24,8 +38,10 @@ export default function ChatRoomPage() {
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const isNearBottomRef = useRef(true);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingRef = useRef(0);
@@ -100,6 +116,33 @@ export default function ChatRoomPage() {
     };
   }, [chatId, user]);
 
+  const handleTextChange = (value: string) => {
+    if (value.length > MAX_MESSAGE_LENGTH) return;
+    setText(value);
+    handleTyping();
+
+    // Detect @mention query at end of input
+    if (chat?.type === "group") {
+      const match = value.match(/@(\w*)$/);
+      setMentionQuery(match ? match[1].toLowerCase() : null);
+    }
+  };
+
+  const handleMentionSelect = (name: string) => {
+    // Replace the trailing @query with @Name
+    const newText = text.replace(/@\w*$/, `@${name} `);
+    setText(newText);
+    setMentionQuery(null);
+    inputRef.current?.focus();
+  };
+
+  const filteredMembers = (() => {
+    if (mentionQuery === null || !chat?.memberNames || !user) return [];
+    return Object.entries(chat.memberNames)
+      .filter(([uid, name]) => uid !== user.uid && name.toLowerCase().startsWith(mentionQuery))
+      .slice(0, 6);
+  })();
+
   const handleSend = async () => {
     if (!user || !text.trim() || text.length > MAX_MESSAGE_LENGTH) return;
 
@@ -117,6 +160,7 @@ export default function ChatRoomPage() {
     };
 
     setText("");
+    setMentionQuery(null);
     setError(null);
     setPendingMessages((prev) => [...prev, pending]);
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
@@ -290,7 +334,7 @@ export default function ChatRoomPage() {
                         : "bg-white border border-blue-50 text-gray-800 rounded-bl-md"
                     }`}
                   >
-                    {msg.content}
+                    {renderContent(msg.content, isMe)}
                   </div>
                   <div className={`flex items-center gap-1.5 mt-1 ${isMe ? "justify-end mr-1" : "ml-1"}`}>
                     <span className="text-[10px] text-gray-400">
@@ -320,22 +364,47 @@ export default function ChatRoomPage() {
       )}
 
       <div className="pt-3 border-t border-blue-50">
+        {/* @mention dropdown */}
+        {filteredMembers.length > 0 && (
+          <div className="mb-2 bg-white border border-blue-100 rounded-xl shadow-lg overflow-hidden">
+            {filteredMembers.map(([uid, name]) => (
+              <button
+                key={uid}
+                onMouseDown={(e) => { e.preventDefault(); handleMentionSelect(name); }}
+                className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-blue-50 transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-full bg-blue-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  {chat.memberPhotos?.[uid] ? (
+                    <img src={chat.memberPhotos[uid]} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-blue-600 text-xs font-semibold">{name[0]?.toUpperCase()}</span>
+                  )}
+                </div>
+                <span className="text-sm text-gray-800">
+                  <span className="text-blue-500 font-semibold">@</span>{name}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             value={text}
-            onChange={(e) => {
-              if (e.target.value.length <= MAX_MESSAGE_LENGTH) {
-                setText(e.target.value);
-                handleTyping();
-              }
-            }}
+            onChange={(e) => handleTextChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                handleSend();
+                if (filteredMembers.length > 0) {
+                  handleMentionSelect(filteredMembers[0][1]);
+                } else {
+                  handleSend();
+                }
               }
+              if (e.key === "Escape") setMentionQuery(null);
             }}
-            placeholder="Type a message..."
+            placeholder={chat.type === "group" ? "Type @ to mention someone..." : "Type a message..."}
             maxLength={MAX_MESSAGE_LENGTH}
             className="flex-1 px-4 py-3 bg-white border border-blue-100 rounded-xl text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
           />

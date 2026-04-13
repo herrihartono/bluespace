@@ -18,9 +18,6 @@ import {
   increment,
   serverTimestamp,
   writeBatch,
-  startAfter,
-  DocumentSnapshot,
-  endBefore,
 } from "firebase/firestore";
 import { getFirebaseDb } from "./firebase";
 import { UserProfile, Post, FriendRequest, Friend, Chat, Message, Comment } from "@/types";
@@ -29,6 +26,14 @@ function snapshotErrorHandler(context: string) {
   return (error: Error) => {
     console.warn(`[Firestore] ${context} listener error (index may still be building):`, error.message);
   };
+}
+
+function toMillis(val: any): number {
+  if (!val) return Date.now();
+  if (typeof val === "number") return val;
+  if (typeof val?.toMillis === "function") return val.toMillis();
+  if (val?.seconds) return val.seconds * 1000;
+  return Date.now();
 }
 
 // ─── User Operations ───
@@ -221,7 +226,10 @@ export function subscribeToChats(userId: string, callback: (chats: Chat[]) => vo
     orderBy("updatedAt", "desc")
   );
   return onSnapshot(q, (snap) => {
-    const chats = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Chat));
+    const chats = snap.docs.map((d) => {
+      const data = d.data();
+      return { ...data, id: d.id, updatedAt: toMillis(data.updatedAt) } as Chat;
+    });
     callback(chats);
   }, snapshotErrorHandler("chats"));
 }
@@ -273,7 +281,9 @@ export async function findPrivateChat(userId: string, friendId: string): Promise
       const data = d.data() as Chat;
       return data.members.includes(friendId);
     });
-    return chat ? ({ ...chat.data(), id: chat.id } as Chat) : null;
+    if (!chat) return null;
+    const data = chat.data();
+    return { ...data, id: chat.id, updatedAt: toMillis(data.updatedAt) } as Chat;
   } catch (err) {
     console.warn("[Firestore] findPrivateChat error:", err);
     return null;
@@ -296,7 +306,8 @@ export async function setTypingStatus(chatId: string, userId: string, isTyping: 
 export function subscribeToChatDoc(chatId: string, callback: (chat: Chat | null) => void) {
   return onSnapshot(doc(getFirebaseDb(), "chats", chatId), (snap) => {
     if (snap.exists()) {
-      callback({ ...snap.data(), id: snap.id } as Chat);
+      const data = snap.data();
+      callback({ ...data, id: snap.id, updatedAt: toMillis(data.updatedAt) } as Chat);
     } else {
       callback(null);
     }

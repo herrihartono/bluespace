@@ -154,11 +154,11 @@ export function subscribeToFriendRequests(userId: string, callback: (reqs: Frien
   const q = query(
     collection(getFirebaseDb(), "friendRequests"),
     where("toId", "==", userId),
-    where("status", "==", "pending"),
-    orderBy("createdAt", "desc")
+    where("status", "==", "pending")
   );
   return onSnapshot(q, (snap) => {
     const reqs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as FriendRequest));
+    reqs.sort((a, b) => b.createdAt - a.createdAt);
     callback(reqs);
   }, snapshotErrorHandler("friendRequests"));
 }
@@ -221,14 +221,14 @@ export async function createChat(chat: Omit<Chat, "id">) {
 export function subscribeToChats(userId: string, callback: (chats: Chat[]) => void) {
   const q = query(
     collection(getFirebaseDb(), "chats"),
-    where("members", "array-contains", userId),
-    orderBy("updatedAt", "desc")
+    where("members", "array-contains", userId)
   );
   return onSnapshot(q, (snap) => {
     const chats = snap.docs.map((d) => {
       const data = d.data();
       return { ...data, id: d.id, updatedAt: toMillis(data.updatedAt) } as Chat;
     });
+    chats.sort((a, b) => b.updatedAt - a.updatedAt);
     callback(chats);
   }, snapshotErrorHandler("chats"));
 }
@@ -252,12 +252,13 @@ export function subscribeToMessages(
   chatId: string,
   callback: (messages: Message[]) => void,
   onError?: (err: Error) => void,
-  msgLimit = 50,
+  msgLimit = 200,
 ) {
+  // No orderBy to avoid requiring a composite index that may not be deployed.
+  // We sort client-side after receiving docs.
   const q = query(
     collection(getFirebaseDb(), "messages"),
     where("chatId", "==", chatId),
-    orderBy("createdAt", "desc"),
     limit(msgLimit)
   );
   return onSnapshot(q, (snap) => {
@@ -269,7 +270,8 @@ export function subscribeToMessages(
         createdAt: toMillis(data.createdAt),
       } as Message;
     });
-    callback(messages.reverse());
+    messages.sort((a, b) => a.createdAt - b.createdAt);
+    callback(messages);
   }, (error) => {
     console.warn("[Firestore] messages listener error:", error.message);
     if (onError) onError(error);
@@ -336,16 +338,18 @@ export function subscribeToComments(
   callback: (comments: Comment[]) => void,
   onError?: (err: Error) => void,
 ) {
+  // No orderBy to avoid requiring a composite index that may not be deployed.
+  // We sort client-side after receiving docs.
   const q = query(
     collection(getFirebaseDb(), "comments"),
-    where("postId", "==", postId),
-    orderBy("createdAt", "asc")
+    where("postId", "==", postId)
   );
   return onSnapshot(q, (snap) => {
     const comments = snap.docs.map((d) => {
       const data = d.data();
       return { ...data, id: d.id, createdAt: toMillis(data.createdAt) } as Comment;
     });
+    comments.sort((a, b) => a.createdAt - b.createdAt);
     callback(comments);
   }, (error) => {
     console.warn("[Firestore] comments listener error:", error.message);

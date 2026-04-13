@@ -18,6 +18,12 @@ import {
 import { getFirebaseDb } from "./firebase";
 import { UserProfile, Post, FriendRequest, Friend, Chat, Message } from "@/types";
 
+function snapshotErrorHandler(context: string) {
+  return (error: Error) => {
+    console.warn(`[Firestore] ${context} listener error (index may still be building):`, error.message);
+  };
+}
+
 // ─── User Operations ───
 
 export async function createUserProfile(user: UserProfile) {
@@ -47,7 +53,10 @@ export async function searchUsers(searchTerm: string): Promise<UserProfile[]> {
 // ─── Post Operations ───
 
 export async function createPost(post: Omit<Post, "id">) {
-  const ref = await addDoc(collection(getFirebaseDb(), "posts"), post);
+  const data = Object.fromEntries(
+    Object.entries(post).filter(([, v]) => v !== undefined)
+  );
+  const ref = await addDoc(collection(getFirebaseDb(), "posts"), data);
   return ref.id;
 }
 
@@ -56,7 +65,7 @@ export function subscribeToPosts(callback: (posts: Post[]) => void) {
   return onSnapshot(q, (snap) => {
     const posts = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Post));
     callback(posts);
-  });
+  }, snapshotErrorHandler("posts"));
 }
 
 export async function toggleLike(postId: string, userId: string, liked: boolean) {
@@ -89,7 +98,7 @@ export function subscribeToFriendRequests(userId: string, callback: (reqs: Frien
   return onSnapshot(q, (snap) => {
     const reqs = snap.docs.map((d) => ({ ...d.data(), id: d.id } as FriendRequest));
     callback(reqs);
-  });
+  }, snapshotErrorHandler("friendRequests"));
 }
 
 export async function respondToFriendRequest(requestId: string, status: "accepted" | "rejected") {
@@ -107,7 +116,7 @@ export function subscribeToFriends(userId: string, callback: (friends: Friend[])
   return onSnapshot(q, (snap) => {
     const friends = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Friend));
     callback(friends);
-  });
+  }, snapshotErrorHandler("friends"));
 }
 
 export async function removeFriend(friendDocId: string) {
@@ -136,7 +145,7 @@ export function subscribeToChats(userId: string, callback: (chats: Chat[]) => vo
   return onSnapshot(q, (snap) => {
     const chats = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Chat));
     callback(chats);
-  });
+  }, snapshotErrorHandler("chats"));
 }
 
 export async function sendMessage(message: Omit<Message, "id">) {
@@ -158,7 +167,7 @@ export function subscribeToMessages(chatId: string, callback: (messages: Message
   return onSnapshot(q, (snap) => {
     const messages = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Message));
     callback(messages);
-  });
+  }, snapshotErrorHandler("messages"));
 }
 
 export async function findPrivateChat(userId: string, friendId: string): Promise<Chat | null> {

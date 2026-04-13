@@ -20,6 +20,7 @@ export interface Post {
   tags: string[];
   groupTags: string[];
   likes: string[];
+  visibility: "global" | "friends";
   repostOf?: string;
   repostAuthorName?: string;
   repostAuthorUsername?: string;

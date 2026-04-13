@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { createPost } from "@/lib/firestore";
 import { uploadImage } from "@/lib/storage";
-import { HiPhoto, HiUserPlus, HiUserGroup, HiXMark } from "react-icons/hi2";
+import { HiPhoto, HiUserPlus, HiUserGroup, HiXMark, HiGlobeAlt, HiUserCircle } from "react-icons/hi2";
 
 interface CreatePostProps {
   friends: { username: string; uid: string }[];
@@ -18,9 +18,11 @@ export default function CreatePost({ friends, groups }: CreatePostProps) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [visibility, setVisibility] = useState<"global" | "friends">("friends");
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,6 +36,7 @@ export default function CreatePost({ friends, groups }: CreatePostProps) {
   const handlePost = async () => {
     if (!user || (!content.trim() && !imageFile)) return;
     setPosting(true);
+    setError(null);
     try {
       let imageURL: string | undefined;
       if (imageFile) {
@@ -49,6 +52,7 @@ export default function CreatePost({ friends, groups }: CreatePostProps) {
         tags: selectedTags,
         groupTags: selectedGroups,
         likes: [],
+        visibility,
         createdAt: Date.now(),
       });
       setContent("");
@@ -56,8 +60,10 @@ export default function CreatePost({ friends, groups }: CreatePostProps) {
       setImagePreview(null);
       setSelectedTags([]);
       setSelectedGroups([]);
-    } catch (err) {
+      setVisibility("friends");
+    } catch (err: any) {
       console.error("Failed to post:", err);
+      setError(err?.message || "Failed to create post. Please try again.");
     }
     setPosting(false);
   };
@@ -126,6 +132,39 @@ export default function CreatePost({ friends, groups }: CreatePostProps) {
                   </button>
                 </span>
               ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => setVisibility("friends")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                visibility === "friends"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              <HiUserCircle className="w-3.5 h-3.5" />
+              Friends Only
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisibility("global")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                visibility === "global"
+                  ? "bg-green-600 text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              <HiGlobeAlt className="w-3.5 h-3.5" />
+              Global
+            </button>
+          </div>
+
+          {error && (
+            <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">
+              {error}
             </div>
           )}
 

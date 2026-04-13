@@ -5,7 +5,7 @@ import { Post } from "@/types";
 import { toggleLike, deletePost, createPost } from "@/lib/firestore";
 import { useAuthStore } from "@/store/authStore";
 import { formatDistanceToNow } from "date-fns";
-import { HiHeart, HiOutlineHeart, HiChatBubbleLeft, HiArrowPath, HiEllipsisHorizontal, HiTrash } from "react-icons/hi2";
+import { HiHeart, HiOutlineHeart, HiChatBubbleLeft, HiArrowPath, HiEllipsisHorizontal, HiTrash, HiGlobeAlt, HiUserCircle } from "react-icons/hi2";
 
 interface PostCardProps {
   post: Post;
@@ -35,6 +35,7 @@ export default function PostCard({ post }: PostCardProps) {
       tags: [],
       groupTags: [],
       likes: [],
+      visibility: post.visibility || "friends",
       repostOf: post.id,
       repostAuthorName: post.authorName,
       repostAuthorUsername: post.authorUsername,
@@ -78,6 +79,12 @@ export default function PostCard({ post }: PostCardProps) {
               <span className="text-gray-400 text-xs">
                 {formatDistanceToNow(post.createdAt, { addSuffix: true })}
               </span>
+              <span className="text-gray-300 text-xs">·</span>
+              {post.visibility === "global" ? (
+                <HiGlobeAlt className="w-3.5 h-3.5 text-green-500" title="Global" />
+              ) : (
+                <HiUserCircle className="w-3.5 h-3.5 text-blue-400" title="Friends only" />
+              )}
             </div>
 
             {user?.uid === post.authorId && (

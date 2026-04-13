@@ -7,7 +7,7 @@ import {
   subscribeToFriends,
   respondToFriendRequest,
   addFriend,
-  removeFriend,
+  removeFriendBidirectional,
 } from "@/lib/firestore";
 import { FriendRequest, Friend } from "@/types";
 import { HiCheck, HiXMark, HiUserMinus, HiChatBubbleLeftEllipsis, HiMagnifyingGlass, HiUserPlus } from "react-icons/hi2";
@@ -20,6 +20,8 @@ export default function FriendsPage() {
   const [tab, setTab] = useState<"friends" | "requests">("friends");
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,38 +31,58 @@ export default function FriendsPage() {
     return () => { unsub1(); unsub2(); };
   }, [user]);
 
+  const showError = (msg: string) => {
+    setError(msg);
+    setTimeout(() => setError(null), 3000);
+  };
+
   const handleAccept = async (req: FriendRequest) => {
     if (!user) return;
-    await respondToFriendRequest(req.id, "accepted");
-    const now = Date.now();
-    await addFriend(user.uid, {
-      odId: req.fromId,
-      odName: req.fromName,
-      userId: user.uid,
-      friendId: req.fromId,
-      friendName: req.fromName,
-      friendUsername: req.fromUsername,
-      friendPhoto: req.fromPhoto,
-      since: now,
-    });
-    await addFriend(req.fromId, {
-      odId: user.uid,
-      odName: user.displayName,
-      userId: req.fromId,
-      friendId: user.uid,
-      friendName: user.displayName,
-      friendUsername: user.username,
-      friendPhoto: user.photoURL,
-      since: now,
-    });
+    try {
+      await respondToFriendRequest(req.id, "accepted");
+      const now = Date.now();
+      await addFriend(user.uid, {
+        odId: req.fromId,
+        odName: req.fromName,
+        userId: user.uid,
+        friendId: req.fromId,
+        friendName: req.fromName,
+        friendUsername: req.fromUsername,
+        friendPhoto: req.fromPhoto,
+        since: now,
+      });
+      await addFriend(req.fromId, {
+        odId: user.uid,
+        odName: user.displayName,
+        userId: req.fromId,
+        friendId: user.uid,
+        friendName: user.displayName,
+        friendUsername: user.username,
+        friendPhoto: user.photoURL,
+        since: now,
+      });
+    } catch (err) {
+      showError("Failed to accept request");
+    }
   };
 
   const handleReject = async (req: FriendRequest) => {
-    await respondToFriendRequest(req.id, "rejected");
+    try {
+      await respondToFriendRequest(req.id, "rejected");
+    } catch {
+      showError("Failed to reject request");
+    }
   };
 
-  const handleRemoveFriend = async (friendDoc: Friend) => {
-    await removeFriend(friendDoc.id);
+  const handleRemoveFriend = async (friend: Friend) => {
+    if (!user) return;
+    setRemoving(friend.id);
+    try {
+      await removeFriendBidirectional(user.uid, friend.friendId);
+    } catch {
+      showError("Failed to remove friend");
+    }
+    setRemoving(null);
   };
 
   const handleChat = async (friend: Friend) => {
@@ -82,8 +104,8 @@ export default function FriendsPage() {
         chat = { id } as any;
       }
       router.push(`/chat/${chat!.id}`);
-    } catch (err) {
-      console.error("Failed to open chat:", err);
+    } catch {
+      showError("Failed to open chat");
     }
   };
 
@@ -101,15 +123,17 @@ export default function FriendsPage() {
         </Link>
       </div>
 
+      {error && (
+        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">{error}</div>
+      )}
+
       <div className="flex gap-2 bg-white rounded-xl p-1 border border-blue-50">
         {(["friends", "requests"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
-              tab === t
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
+              tab === t ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
             {t === "friends" ? "My Friends" : `Requests ${requests.length > 0 ? `(${requests.length})` : ""}`}
@@ -148,19 +172,11 @@ export default function FriendsPage() {
                   </div>
                 )}
                 <div className="flex gap-2 mt-3">
-                  <button
-                    onClick={() => handleAccept(req)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors"
-                  >
-                    <HiCheck className="w-4 h-4" />
-                    Accept
+                  <button onClick={() => handleAccept(req)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-colors">
+                    <HiCheck className="w-4 h-4" /> Accept
                   </button>
-                  <button
-                    onClick={() => handleReject(req)}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
-                  >
-                    <HiXMark className="w-4 h-4" />
-                    Decline
+                  <button onClick={() => handleReject(req)} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gray-100 text-gray-600 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors">
+                    <HiXMark className="w-4 h-4" /> Decline
                   </button>
                 </div>
               </div>
@@ -176,12 +192,8 @@ export default function FriendsPage() {
               <div className="text-5xl mb-4">👥</div>
               <h3 className="text-lg font-semibold text-gray-600">No friends yet</h3>
               <p className="text-gray-400 text-sm mt-1">Search for people to connect with</p>
-              <Link
-                href="/search"
-                className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-700 transition-colors"
-              >
-                <HiMagnifyingGlass className="w-4 h-4" />
-                Find Friends
+              <Link href="/search" className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-700 transition-colors">
+                <HiMagnifyingGlass className="w-4 h-4" /> Find Friends
               </Link>
             </div>
           ) : (
@@ -202,17 +214,15 @@ export default function FriendsPage() {
                     <div className="text-gray-400 text-xs truncate">@{friend.friendUsername}</div>
                   </div>
                   <div className="flex gap-1.5 shrink-0">
-                    <button
-                      onClick={() => handleChat(friend)}
-                      className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors"
-                    >
+                    <button onClick={() => handleChat(friend)} className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors">
                       <HiChatBubbleLeftEllipsis className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => handleRemoveFriend(friend)}
-                      className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+                      disabled={removing === friend.id}
+                      className="p-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors disabled:opacity-50"
                     >
-                      <HiUserMinus className="w-5 h-5" />
+                      <HiUserMinus className={`w-5 h-5 ${removing === friend.id ? "animate-pulse" : ""}`} />
                     </button>
                   </div>
                 </div>

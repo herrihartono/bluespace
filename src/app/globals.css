@@ -33,10 +33,13 @@ body {
   border-radius: 9999px;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
-  outline: none;
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
 }
 
 html {

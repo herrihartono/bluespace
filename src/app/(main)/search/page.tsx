@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { searchUsers, sendFriendRequest, getFriendIds } from "@/lib/firestore";
+import { searchUsers, sendFriendRequest, getFriendIds, hasPendingRequest, getPendingRequestIds } from "@/lib/firestore";
 import { UserProfile } from "@/types";
 import { HiMagnifyingGlass, HiUserPlus, HiCheck, HiBriefcase } from "react-icons/hi2";
 
@@ -15,34 +15,61 @@ export default function SearchPage() {
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [noteModal, setNoteModal] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async () => {
     if (!query.trim() || !user) return;
     setSearching(true);
-    const users = await searchUsers(query.trim());
-    setResults(users.filter((u) => u.uid !== user.uid));
-    const ids = await getFriendIds(user.uid);
-    setFriendIds(ids);
+    setError(null);
+    try {
+      const users = await searchUsers(query.trim());
+      setResults(users.filter((u) => u.uid !== user.uid));
+      const [ids, pendingIds] = await Promise.all([
+        getFriendIds(user.uid),
+        getPendingRequestIds(user.uid),
+      ]);
+      setFriendIds(ids);
+      setSentRequests(new Set(pendingIds));
+    } catch (err: any) {
+      setError("Search failed. Please try again.");
+    }
     setSearching(false);
   };
 
   const handleSendRequest = async (target: UserProfile) => {
     if (!user) return;
-    await sendFriendRequest({
-      fromId: user.uid,
-      fromName: user.displayName,
-      fromUsername: user.username,
-      fromPhoto: user.photoURL,
-      toId: target.uid,
-      toName: target.displayName,
-      toUsername: target.username,
-      note,
-      status: "pending",
-      createdAt: Date.now(),
-    });
-    setSentRequests((prev) => new Set(prev).add(target.uid));
-    setNoteModal(null);
-    setNote("");
+    setSending(true);
+    setError(null);
+    try {
+      const alreadyPending = await hasPendingRequest(user.uid, target.uid);
+      if (alreadyPending) {
+        setSentRequests((prev) => new Set(prev).add(target.uid));
+        setNoteModal(null);
+        setNote("");
+        setSending(false);
+        return;
+      }
+
+      await sendFriendRequest({
+        fromId: user.uid,
+        fromName: user.displayName,
+        fromUsername: user.username,
+        fromPhoto: user.photoURL,
+        toId: target.uid,
+        toName: target.displayName,
+        toUsername: target.username,
+        note,
+        status: "pending",
+        createdAt: Date.now(),
+      });
+      setSentRequests((prev) => new Set(prev).add(target.uid));
+      setNoteModal(null);
+      setNote("");
+    } catch (err: any) {
+      setError("Failed to send request. Please try again.");
+    }
+    setSending(false);
   };
 
   const modalTarget = results.find((p) => p.uid === noteModal);
@@ -70,6 +97,10 @@ export default function SearchPage() {
           {searching ? "..." : "Search"}
         </button>
       </div>
+
+      {error && (
+        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600">{error}</div>
+      )}
 
       <div className="space-y-3">
         {results.map((person) => {
@@ -104,7 +135,7 @@ export default function SearchPage() {
                   {isFriend ? (
                     <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2.5 py-1.5 rounded-full font-medium">
                       <HiCheck className="w-3.5 h-3.5" />
-                      <span className="hidden xs:inline">Friend</span>
+                      Friend
                     </span>
                   ) : requestSent ? (
                     <span className="text-xs text-gray-400 bg-gray-50 px-2.5 py-1.5 rounded-full font-medium">
@@ -155,6 +186,7 @@ export default function SearchPage() {
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Hi! I'd like to connect..."
                 rows={3}
+                maxLength={200}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all mb-4"
               />
               <div className="flex gap-2">
@@ -166,9 +198,10 @@ export default function SearchPage() {
                 </button>
                 <button
                   onClick={() => handleSendRequest(modalTarget)}
-                  className="flex-1 py-3 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors"
+                  disabled={sending}
+                  className="flex-1 py-3 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  Send Request
+                  {sending ? "Sending..." : "Send Request"}
                 </button>
               </div>
             </div>

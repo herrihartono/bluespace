@@ -2,11 +2,22 @@
 
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
-import { HiChatBubbleLeftRight } from "react-icons/hi2";
-import { HiBell } from "react-icons/hi2";
+import { useEffect, useState } from "react";
+import { subscribeToFriendRequests } from "@/lib/firestore";
+import { FriendRequest } from "@/types";
+import { HiChatBubbleLeftRight, HiUserPlus } from "react-icons/hi2";
 
 export default function Navbar() {
   const user = useAuthStore((s) => s.user);
+  const [requestCount, setRequestCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = subscribeToFriendRequests(user.uid, (reqs: FriendRequest[]) => {
+      setRequestCount(reqs.length);
+    });
+    return () => unsub();
+  }, [user]);
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-blue-100">
@@ -17,11 +28,16 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center gap-3">
-          <button className="relative p-2 rounded-full hover:bg-blue-50 transition-colors">
-            <HiBell className="w-5 h-5 text-gray-500" />
-          </button>
+          <Link href="/friends" className="relative p-2 rounded-full hover:bg-blue-50 transition-colors" aria-label="Friend requests">
+            <HiUserPlus className="w-5 h-5 text-gray-500" />
+            {requestCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full px-1">
+                {requestCount > 9 ? "9+" : requestCount}
+              </span>
+            )}
+          </Link>
           {user && (
-            <Link href="/profile">
+            <Link href="/profile" aria-label="Profile">
               <div className="w-8 h-8 rounded-full bg-blue-100 overflow-hidden">
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="" className="w-full h-full object-cover" />

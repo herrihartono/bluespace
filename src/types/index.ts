@@ -63,6 +63,8 @@ export interface Chat {
   memberPhotos: Record<string, string>;
   lastMessage: string;
   lastMessageBy: string;
+  lastReadAt?: Record<string, number>;
+  typing?: Record<string, number>;
   updatedAt: number;
   createdBy: string;
 }
@@ -77,6 +79,10 @@ export interface Message {
   createdAt: number;
 }
 
+export interface PendingMessage extends Message {
+  status: "sending" | "failed";
+}
+
 export interface Comment {
   id: string;
   postId: string;
@@ -87,3 +93,10 @@ export interface Comment {
   content: string;
   createdAt: number;
 }
+
+export const MAX_POST_WORDS = 500;
+export const MAX_POST_CHARS = 3000;
+export const POST_PREVIEW_WORDS = 100;
+export const MAX_MESSAGE_LENGTH = 2000;
+export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];

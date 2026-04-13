@@ -1,9 +1,10 @@
-const CACHE_NAME = "bluespace-v1";
-const OFFLINE_URL = "/";
+const CACHE_NAME = "bluespace-v2";
+const STATIC_ASSETS = ["/"];
+const STATIC_CACHE = "bluespace-static-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll([OFFLINE_URL]))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
@@ -12,7 +13,9 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys
+          .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE)
+          .map((key) => caches.delete(key))
       )
     )
   );
@@ -20,11 +23,42 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.mode === "navigate") {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  if (request.method !== "GET") return;
+
+  if (url.hostname === "firestore.googleapis.com" || url.hostname === "firebaseinstallations.googleapis.com") {
+    return;
+  }
+
+  if (request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() =>
-        caches.match(OFFLINE_URL).then((resp) => resp || fetch(event.request))
+      fetch(request).catch(() =>
+        caches.match("/").then((resp) => resp || fetch(request))
       )
     );
+    return;
+  }
+
+  if (
+    request.destination === "script" ||
+    request.destination === "style" ||
+    request.destination === "font" ||
+    request.destination === "image"
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        }).catch(() => caches.match("/"));
+      })
+    );
+    return;
   }
 });

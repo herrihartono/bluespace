@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
-import { updateUserProfile } from "@/lib/firestore";
-import { uploadProfilePhoto } from "@/lib/storage";
+import { updateUserProfile, isUsernameAvailable } from "@/lib/firestore";
+import { uploadProfilePhoto, validateImageFile } from "@/lib/storage";
 import { useRouter } from "next/navigation";
-import { HiCamera, HiArrowLeft } from "react-icons/hi2";
+import { HiCamera, HiArrowLeft, HiExclamationTriangle } from "react-icons/hi2";
 
 export default function EditProfilePage() {
   const user = useAuthStore((s) => s.user);
@@ -20,35 +20,83 @@ export default function EditProfilePage() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
+    };
+  }, [photoPreview]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setPhotoFile(file);
-      setPhotoPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
+
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    setError(null);
+  };
+
+  const handleUsernameChange = (value: string) => {
+    const clean = value.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    setUsername(clean);
+    setUsernameError(null);
   };
 
   const handleSave = async () => {
     if (!user) return;
+    setError(null);
+    setUsernameError(null);
+
+    const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (!cleanUsername) {
+      setUsernameError("Username cannot be empty");
+      return;
+    }
+    if (cleanUsername.length < 3) {
+      setUsernameError("Username must be at least 3 characters");
+      return;
+    }
+    if (!displayName.trim()) {
+      setError("Display name cannot be empty");
+      return;
+    }
+
     setSaving(true);
     try {
+      if (cleanUsername !== user.username) {
+        const available = await isUsernameAvailable(cleanUsername, user.uid);
+        if (!available) {
+          setUsernameError("Username is already taken");
+          setSaving(false);
+          return;
+        }
+      }
+
       let photoURL = user.photoURL;
       if (photoFile) {
         photoURL = await uploadProfilePhoto(photoFile, user.uid);
       }
       const updates = {
-        displayName,
-        username: username.toLowerCase().replace(/[^a-z0-9_]/g, ""),
-        division,
-        bio,
+        displayName: displayName.trim(),
+        username: cleanUsername,
+        division: division.trim(),
+        bio: bio.trim(),
         photoURL,
       };
       await updateUserProfile(user.uid, updates);
       setUser({ ...user, ...updates });
       router.back();
-    } catch (err) {
-      console.error("Failed to save:", err);
+    } catch (err: any) {
+      setError(err?.message || "Failed to save. Please try again.");
     }
     setSaving(false);
   };
@@ -84,9 +132,16 @@ export default function EditProfilePage() {
             >
               <HiCamera className="w-4 h-4" />
             </button>
-            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handlePhotoChange} className="hidden" />
           </div>
         </div>
+
+        {error && (
+          <div className="mb-4 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 flex items-center gap-2">
+            <HiExclamationTriangle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
 
         <div className="space-y-4">
           <div>
@@ -94,6 +149,7 @@ export default function EditProfilePage() {
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={50}
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
             />
           </div>
@@ -104,10 +160,16 @@ export default function EditProfilePage() {
               <span className="px-3 py-3 bg-gray-100 border border-r-0 border-gray-200 rounded-l-xl text-sm text-gray-400">@</span>
               <input
                 value={username}
-                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-r-xl text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                onChange={(e) => handleUsernameChange(e.target.value)}
+                maxLength={30}
+                className={`flex-1 px-4 py-3 bg-gray-50 border rounded-r-xl text-sm focus:ring-2 transition-all ${
+                  usernameError ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-gray-200 focus:border-blue-400 focus:ring-blue-100"
+                }`}
               />
             </div>
+            {usernameError && (
+              <p className="text-xs text-red-500 mt-1">{usernameError}</p>
+            )}
           </div>
 
           <div>
@@ -116,6 +178,7 @@ export default function EditProfilePage() {
               value={division}
               onChange={(e) => setDivision(e.target.value)}
               placeholder="e.g. Engineering, Design, Marketing"
+              maxLength={50}
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
             />
           </div>
@@ -126,6 +189,7 @@ export default function EditProfilePage() {
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               rows={3}
+              maxLength={200}
               placeholder="Tell us about yourself..."
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
             />

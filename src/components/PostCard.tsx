@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Post, Comment } from "@/types";
-import { toggleLike, deletePost, createPost, addComment, subscribeToComments, deleteComment } from "@/lib/firestore";
+import { useState, useEffect, useRef } from "react";
+import { Post, Comment, POST_PREVIEW_WORDS } from "@/types";
+import { toggleLike, deletePost, createPost, addComment, subscribeToComments, deleteComment, hasUserReposted } from "@/lib/firestore";
 import { useAuthStore } from "@/store/authStore";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -15,7 +15,18 @@ import {
   HiGlobeAlt,
   HiUserCircle,
   HiPaperAirplane,
+  HiCheck,
 } from "react-icons/hi2";
+
+function countWords(text: string) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function truncateByWords(text: string, maxWords: number) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+  return words.slice(0, maxWords).join(" ");
+}
 
 interface PostCardProps {
   post: Post;
@@ -28,10 +39,18 @@ export default function PostCard({ post }: PostCardProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [reposted, setReposted] = useState(false);
+  const [reposting, setReposting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const liked = user ? post.likes?.includes(user.uid) : false;
   const likeCount = post.likes?.length || 0;
   const commentCount = post.commentCount || comments.length || 0;
+  const wordCount = countWords(post.content);
+  const isLong = wordCount > POST_PREVIEW_WORDS;
+  const displayContent = isLong && !expanded ? truncateByWords(post.content, POST_PREVIEW_WORDS) + "..." : post.content;
 
   useEffect(() => {
     if (!showComments) return;
@@ -39,33 +58,69 @@ export default function PostCard({ post }: PostCardProps) {
     return () => unsub();
   }, [showComments, post.id]);
 
+  useEffect(() => {
+    if (!showMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showMenu]);
+
+  const clearError = () => {
+    if (actionError) setTimeout(() => setActionError(null), 3000);
+  };
+
   const handleLike = async () => {
     if (!user) return;
-    await toggleLike(post.id, user.uid, liked);
+    try {
+      await toggleLike(post.id, user.uid, liked);
+    } catch (err: any) {
+      setActionError("Failed to like"); clearError();
+    }
   };
 
   const handleRepost = async () => {
-    if (!user) return;
-    await createPost({
-      authorId: user.uid,
-      authorName: user.displayName,
-      authorUsername: user.username,
-      authorPhoto: user.photoURL,
-      content: post.content,
-      imageURL: post.imageURL,
-      tags: [],
-      groupTags: [],
-      likes: [],
-      visibility: post.visibility || "friends",
-      repostOf: post.id,
-      repostAuthorName: post.authorName,
-      repostAuthorUsername: post.authorUsername,
-      createdAt: Date.now(),
-    });
+    if (!user || reposted || reposting) return;
+    setReposting(true);
+    try {
+      const already = await hasUserReposted(post.id, user.uid);
+      if (already) {
+        setReposted(true);
+        setReposting(false);
+        return;
+      }
+      await createPost({
+        authorId: user.uid,
+        authorName: user.displayName,
+        authorUsername: user.username,
+        authorPhoto: user.photoURL,
+        content: post.content,
+        imageURL: post.imageURL,
+        tags: [],
+        groupTags: [],
+        likes: [],
+        visibility: post.visibility || "friends",
+        repostOf: post.id,
+        repostAuthorName: post.authorName,
+        repostAuthorUsername: post.authorUsername,
+        createdAt: Date.now(),
+      });
+      setReposted(true);
+    } catch (err: any) {
+      setActionError("Failed to repost"); clearError();
+    }
+    setReposting(false);
   };
 
   const handleDelete = async () => {
-    await deletePost(post.id);
+    try {
+      await deletePost(post.id);
+    } catch (err: any) {
+      setActionError("Failed to delete"); clearError();
+    }
     setShowMenu(false);
   };
 
@@ -83,14 +138,18 @@ export default function PostCard({ post }: PostCardProps) {
         createdAt: Date.now(),
       });
       setCommentText("");
-    } catch (err) {
-      console.error("Failed to add comment:", err);
+    } catch (err: any) {
+      setActionError("Failed to comment"); clearError();
     }
     setSendingComment(false);
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    await deleteComment(commentId, post.id);
+    try {
+      await deleteComment(commentId, post.id);
+    } catch (err: any) {
+      setActionError("Failed to delete comment"); clearError();
+    }
   };
 
   return (
@@ -136,7 +195,7 @@ export default function PostCard({ post }: PostCardProps) {
             </div>
 
             {user?.uid === post.authorId && (
-              <div className="relative">
+              <div className="relative" ref={menuRef}>
                 <button
                   onClick={() => setShowMenu(!showMenu)}
                   className="p-1 rounded-full hover:bg-blue-50 transition-colors"
@@ -159,8 +218,16 @@ export default function PostCard({ post }: PostCardProps) {
           </div>
 
           <p className="text-gray-800 mt-1 whitespace-pre-wrap text-sm leading-relaxed">
-            {post.content}
+            {displayContent}
           </p>
+          {isLong && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-blue-500 text-xs font-medium mt-1 hover:text-blue-600"
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          )}
 
           {post.tags?.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
@@ -182,6 +249,10 @@ export default function PostCard({ post }: PostCardProps) {
             <div className="mt-3 rounded-xl overflow-hidden border border-gray-100">
               <img src={post.imageURL} alt="" className="w-full object-cover max-h-96" />
             </div>
+          )}
+
+          {actionError && (
+            <div className="mt-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">{actionError}</div>
           )}
 
           <div className="flex items-center gap-6 mt-3">
@@ -207,9 +278,12 @@ export default function PostCard({ post }: PostCardProps) {
 
             <button
               onClick={handleRepost}
-              className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-green-500 transition-colors"
+              disabled={reposted || reposting}
+              className={`flex items-center gap-1.5 text-sm transition-colors ${
+                reposted ? "text-green-500" : "text-gray-400 hover:text-green-500"
+              } disabled:cursor-not-allowed`}
             >
-              <HiArrowPath className="w-5 h-5" />
+              {reposted ? <HiCheck className="w-5 h-5" /> : <HiArrowPath className={`w-5 h-5 ${reposting ? "animate-spin" : ""}`} />}
             </button>
           </div>
 
@@ -273,8 +347,14 @@ export default function PostCard({ post }: PostCardProps) {
                   <input
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
                     placeholder="Write a comment..."
+                    maxLength={500}
                     className="flex-1 px-3 py-2 bg-gray-50 border border-gray-100 rounded-xl text-xs focus:border-blue-300 focus:ring-1 focus:ring-blue-100 transition-all"
                   />
                   <button

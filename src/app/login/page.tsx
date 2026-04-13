@@ -107,7 +107,7 @@ export default function LoginPage() {
           </button>
 
           <p className="text-xs text-gray-400 text-center mt-6">
-            By signing in, you agree to our Terms of Service and Privacy Policy
+            By signing in, you agree to our terms of service.
           </p>
         </div>
       </div>

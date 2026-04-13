@@ -10,11 +10,17 @@ import {
   where,
   orderBy,
   limit,
+  limitToLast,
   onSnapshot,
   addDoc,
   arrayUnion,
   arrayRemove,
   increment,
+  serverTimestamp,
+  writeBatch,
+  startAfter,
+  DocumentSnapshot,
+  endBefore,
 } from "firebase/firestore";
 import { getFirebaseDb } from "./firebase";
 import { UserProfile, Post, FriendRequest, Friend, Chat, Message, Comment } from "@/types";
@@ -51,6 +57,17 @@ export async function searchUsers(searchTerm: string): Promise<UserProfile[]> {
   return snap.docs.map((d) => d.data() as UserProfile);
 }
 
+export async function isUsernameAvailable(username: string, currentUid: string): Promise<boolean> {
+  const q = query(
+    collection(getFirebaseDb(), "users"),
+    where("username", "==", username),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  if (snap.empty) return true;
+  return snap.docs[0].data().uid === currentUid;
+}
+
 // ─── Post Operations ───
 
 export async function createPost(post: Omit<Post, "id">) {
@@ -79,7 +96,25 @@ export async function toggleLike(postId: string, userId: string, liked: boolean)
 }
 
 export async function deletePost(postId: string) {
-  await deleteDoc(doc(getFirebaseDb(), "posts", postId));
+  const db = getFirebaseDb();
+  const commentsQuery = query(collection(db, "comments"), where("postId", "==", postId));
+  const commentSnap = await getDocs(commentsQuery);
+
+  const batch = writeBatch(db);
+  commentSnap.docs.forEach((d) => batch.delete(d.ref));
+  batch.delete(doc(db, "posts", postId));
+  await batch.commit();
+}
+
+export async function hasUserReposted(postId: string, userId: string): Promise<boolean> {
+  const q = query(
+    collection(getFirebaseDb(), "posts"),
+    where("repostOf", "==", postId),
+    where("authorId", "==", userId),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
 }
 
 // ─── Friend Request Operations ───
@@ -87,6 +122,28 @@ export async function deletePost(postId: string) {
 export async function sendFriendRequest(request: Omit<FriendRequest, "id">) {
   const ref = await addDoc(collection(getFirebaseDb(), "friendRequests"), request);
   return ref.id;
+}
+
+export async function hasPendingRequest(fromId: string, toId: string): Promise<boolean> {
+  const q = query(
+    collection(getFirebaseDb(), "friendRequests"),
+    where("fromId", "==", fromId),
+    where("toId", "==", toId),
+    where("status", "==", "pending"),
+    limit(1)
+  );
+  const snap = await getDocs(q);
+  return !snap.empty;
+}
+
+export async function getPendingRequestIds(fromId: string): Promise<string[]> {
+  const q = query(
+    collection(getFirebaseDb(), "friendRequests"),
+    where("fromId", "==", fromId),
+    where("status", "==", "pending")
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data().toId);
 }
 
 export function subscribeToFriendRequests(userId: string, callback: (reqs: FriendRequest[]) => void) {
@@ -120,6 +177,26 @@ export function subscribeToFriends(userId: string, callback: (friends: Friend[])
   }, snapshotErrorHandler("friends"));
 }
 
+export async function removeFriendBidirectional(userId: string, friendId: string) {
+  const db = getFirebaseDb();
+  const q1 = query(
+    collection(db, "friends"),
+    where("userId", "==", userId),
+    where("friendId", "==", friendId)
+  );
+  const q2 = query(
+    collection(db, "friends"),
+    where("userId", "==", friendId),
+    where("friendId", "==", userId)
+  );
+
+  const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+  const batch = writeBatch(db);
+  snap1.docs.forEach((d) => batch.delete(d.ref));
+  snap2.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+}
+
 export async function removeFriend(friendDocId: string) {
   await deleteDoc(doc(getFirebaseDb(), "friends", friendDocId));
 }
@@ -150,23 +227,36 @@ export function subscribeToChats(userId: string, callback: (chats: Chat[]) => vo
 }
 
 export async function sendMessage(message: Omit<Message, "id">) {
-  const ref = await addDoc(collection(getFirebaseDb(), "messages"), message);
-  await updateDoc(doc(getFirebaseDb(), "chats", message.chatId), {
-    lastMessage: message.content,
+  const db = getFirebaseDb();
+  const msgData = {
+    ...message,
+    createdAt: serverTimestamp(),
+  };
+  const ref = await addDoc(collection(db, "messages"), msgData);
+  await updateDoc(doc(db, "chats", message.chatId), {
+    lastMessage: message.content.slice(0, 100),
     lastMessageBy: message.senderId,
-    updatedAt: Date.now(),
+    updatedAt: serverTimestamp(),
   });
   return ref.id;
 }
 
-export function subscribeToMessages(chatId: string, callback: (messages: Message[]) => void) {
+export function subscribeToMessages(chatId: string, callback: (messages: Message[]) => void, msgLimit = 50) {
   const q = query(
     collection(getFirebaseDb(), "messages"),
     where("chatId", "==", chatId),
-    orderBy("createdAt", "asc")
+    orderBy("createdAt", "asc"),
+    limitToLast(msgLimit)
   );
   return onSnapshot(q, (snap) => {
-    const messages = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Message));
+    const messages = snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        ...data,
+        id: d.id,
+        createdAt: data.createdAt?.toMillis?.() || data.createdAt || Date.now(),
+      } as Message;
+    });
     callback(messages);
   }, snapshotErrorHandler("messages"));
 }
@@ -188,6 +278,29 @@ export async function findPrivateChat(userId: string, friendId: string): Promise
     console.warn("[Firestore] findPrivateChat error:", err);
     return null;
   }
+}
+
+export async function markChatRead(chatId: string, userId: string) {
+  await updateDoc(doc(getFirebaseDb(), "chats", chatId), {
+    [`lastReadAt.${userId}`]: Date.now(),
+  }).catch(() => {});
+}
+
+export async function setTypingStatus(chatId: string, userId: string, isTyping: boolean) {
+  const update = isTyping
+    ? { [`typing.${userId}`]: Date.now() }
+    : { [`typing.${userId}`]: 0 };
+  await updateDoc(doc(getFirebaseDb(), "chats", chatId), update).catch(() => {});
+}
+
+export function subscribeToChatDoc(chatId: string, callback: (chat: Chat | null) => void) {
+  return onSnapshot(doc(getFirebaseDb(), "chats", chatId), (snap) => {
+    if (snap.exists()) {
+      callback({ ...snap.data(), id: snap.id } as Chat);
+    } else {
+      callback(null);
+    }
+  }, snapshotErrorHandler("chatDoc"));
 }
 
 // ─── Comment Operations ───

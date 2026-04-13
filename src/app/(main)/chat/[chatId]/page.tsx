@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { subscribeToMessages, sendMessage, markChatRead, setTypingStatus, subscribeToChatDoc } from "@/lib/firestore";
 import { Message, Chat, PendingMessage, MAX_MESSAGE_LENGTH } from "@/types";
-import { formatDistanceToNow } from "date-fns";
+import { formatTimestamp, formatChatDate, isSameDay } from "@/lib/formatTime";
 import { HiArrowLeft, HiPaperAirplane, HiUserGroup, HiExclamationCircle, HiArrowPath } from "react-icons/hi2";
 import { v4 as uuidv4 } from "uuid";
 
@@ -20,6 +20,7 @@ export default function ChatRoomPage() {
   const [loading, setLoading] = useState(true);
   const [accessDenied, setAccessDenied] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +31,20 @@ export default function ChatRoomPage() {
   const lastTypingRef = useRef(0);
 
   useEffect(() => {
+    setChat(null);
+    setLoading(true);
+    setAccessDenied(false);
+    setMessages([]);
+    setMessagesError(null);
+    setPendingMessages([]);
+
     const unsub = subscribeToChatDoc(chatId, (c) => {
       setChat(c);
       setLoading(false);
       if (c && user && !c.members.includes(user.uid)) {
         setAccessDenied(true);
+      } else {
+        setAccessDenied(false);
       }
     });
     return () => unsub();
@@ -42,7 +52,13 @@ export default function ChatRoomPage() {
 
   useEffect(() => {
     if (accessDenied || !chat) return;
-    const unsub = subscribeToMessages(chatId, setMessages, 50);
+    setMessagesError(null);
+    const unsub = subscribeToMessages(
+      chatId,
+      setMessages,
+      (err) => setMessagesError("Failed to load messages. The database index may still be building."),
+      50,
+    );
     return () => unsub();
   }, [chatId, accessDenied, chat]);
 
@@ -219,60 +235,77 @@ export default function ChatRoomPage() {
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto py-4 space-y-3"
       >
-        {allMessages.length === 0 && (
+        {messagesError && (
+          <div className="text-center py-4">
+            <p className="text-red-500 text-xs bg-red-50 inline-block px-4 py-2 rounded-xl">{messagesError}</p>
+          </div>
+        )}
+
+        {!messagesError && allMessages.length === 0 && (
           <div className="text-center py-12">
             <div className="text-4xl mb-3">👋</div>
             <p className="text-gray-400 text-sm">Start the conversation</p>
           </div>
         )}
 
-        {allMessages.map((msg) => {
+        {allMessages.map((msg, idx) => {
           const isMe = msg.senderId === user?.uid;
           const isPending = "status" in msg;
           const pendingStatus = isPending ? (msg as PendingMessage).status : null;
+          const prevMsg = idx > 0 ? allMessages[idx - 1] : null;
+          const showDateSep = !prevMsg || !isSameDay(prevMsg.createdAt, msg.createdAt);
 
           return (
-            <div key={msg.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-              {!isMe && (
-                <div className="w-8 h-8 rounded-full bg-blue-100 overflow-hidden shrink-0">
-                  {msg.senderPhoto ? (
-                    <img src={msg.senderPhoto} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-blue-600 text-xs font-semibold">
-                      {msg.senderName?.[0]?.toUpperCase()}
-                    </div>
-                  )}
+            <div key={msg.id}>
+              {showDateSep && (
+                <div className="flex items-center justify-center my-3">
+                  <span className="text-[11px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                    {formatChatDate(msg.createdAt)}
+                  </span>
                 </div>
               )}
-              <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
-                {!isMe && chat.type === "group" && (
-                  <p className="text-xs text-gray-400 mb-0.5 ml-1">{msg.senderName}</p>
+              <div className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                {!isMe && (
+                  <div className="w-8 h-8 rounded-full bg-blue-100 overflow-hidden shrink-0">
+                    {msg.senderPhoto ? (
+                      <img src={msg.senderPhoto} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-blue-600 text-xs font-semibold">
+                        {msg.senderName?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                  </div>
                 )}
-                <div
-                  className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    isMe
-                      ? pendingStatus === "failed"
-                        ? "bg-red-100 text-red-700 rounded-br-md"
-                        : pendingStatus === "sending"
-                        ? "bg-blue-400 text-white rounded-br-md opacity-70"
-                        : "bg-blue-600 text-white rounded-br-md"
-                      : "bg-white border border-blue-50 text-gray-800 rounded-bl-md"
-                  }`}
-                >
-                  {msg.content}
-                </div>
-                <div className={`flex items-center gap-1.5 mt-1 ${isMe ? "justify-end mr-1" : "ml-1"}`}>
-                  <span className="text-[10px] text-gray-400">
-                    {formatDistanceToNow(msg.createdAt, { addSuffix: true })}
-                  </span>
-                  {pendingStatus === "sending" && (
-                    <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                <div className={`max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
+                  {!isMe && chat.type === "group" && (
+                    <p className="text-xs text-gray-400 mb-0.5 ml-1">{msg.senderName}</p>
                   )}
-                  {pendingStatus === "failed" && (
-                    <button onClick={() => handleRetry(msg as PendingMessage)} className="flex items-center gap-0.5 text-[10px] text-red-500 hover:text-red-600">
-                      <HiArrowPath className="w-3 h-3" /> Retry
-                    </button>
-                  )}
+                  <div
+                    className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                      isMe
+                        ? pendingStatus === "failed"
+                          ? "bg-red-100 text-red-700 rounded-br-md"
+                          : pendingStatus === "sending"
+                          ? "bg-blue-400 text-white rounded-br-md opacity-70"
+                          : "bg-blue-600 text-white rounded-br-md"
+                        : "bg-white border border-blue-50 text-gray-800 rounded-bl-md"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                  <div className={`flex items-center gap-1.5 mt-1 ${isMe ? "justify-end mr-1" : "ml-1"}`}>
+                    <span className="text-[10px] text-gray-400">
+                      {formatTimestamp(msg.createdAt)}
+                    </span>
+                    {pendingStatus === "sending" && (
+                      <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                    )}
+                    {pendingStatus === "failed" && (
+                      <button onClick={() => handleRetry(msg as PendingMessage)} className="flex items-center gap-0.5 text-[10px] text-red-500 hover:text-red-600">
+                        <HiArrowPath className="w-3 h-3" /> Retry
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

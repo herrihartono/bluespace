@@ -6,7 +6,7 @@ import { subscribeToChats, subscribeToFriends, createChat } from "@/lib/firestor
 import { Chat, Friend } from "@/types";
 import Link from "next/link";
 import { HiPlus, HiUserGroup, HiChatBubbleLeftEllipsis, HiXMark } from "react-icons/hi2";
-import { formatDistanceToNow } from "date-fns";
+import { formatTimestamp } from "@/lib/formatTime";
 
 export default function ChatListPage() {
   const user = useAuthStore((s) => s.user);
@@ -136,7 +136,7 @@ export default function ChatListPage() {
                     </span>
                     {chat.updatedAt && (
                       <span className="text-[11px] text-gray-400 shrink-0">
-                        {formatDistanceToNow(chat.updatedAt, { addSuffix: true })}
+                        {formatTimestamp(chat.updatedAt)}
                       </span>
                     )}
                   </div>

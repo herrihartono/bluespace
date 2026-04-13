@@ -10,7 +10,6 @@ import {
   where,
   orderBy,
   limit,
-  limitToLast,
   onSnapshot,
   addDoc,
   arrayUnion,
@@ -249,12 +248,17 @@ export async function sendMessage(message: Omit<Message, "id">) {
   return ref.id;
 }
 
-export function subscribeToMessages(chatId: string, callback: (messages: Message[]) => void, msgLimit = 50) {
+export function subscribeToMessages(
+  chatId: string,
+  callback: (messages: Message[]) => void,
+  onError?: (err: Error) => void,
+  msgLimit = 50,
+) {
   const q = query(
     collection(getFirebaseDb(), "messages"),
     where("chatId", "==", chatId),
-    orderBy("createdAt", "asc"),
-    limitToLast(msgLimit)
+    orderBy("createdAt", "desc"),
+    limit(msgLimit)
   );
   return onSnapshot(q, (snap) => {
     const messages = snap.docs.map((d) => {
@@ -262,11 +266,14 @@ export function subscribeToMessages(chatId: string, callback: (messages: Message
       return {
         ...data,
         id: d.id,
-        createdAt: data.createdAt?.toMillis?.() || data.createdAt || Date.now(),
+        createdAt: toMillis(data.createdAt),
       } as Message;
     });
-    callback(messages);
-  }, snapshotErrorHandler("messages"));
+    callback(messages.reverse());
+  }, (error) => {
+    console.warn("[Firestore] messages listener error:", error.message);
+    if (onError) onError(error);
+  });
 }
 
 export async function findPrivateChat(userId: string, friendId: string): Promise<Chat | null> {
@@ -324,16 +331,26 @@ export async function addComment(comment: Omit<Comment, "id">) {
   return ref.id;
 }
 
-export function subscribeToComments(postId: string, callback: (comments: Comment[]) => void) {
+export function subscribeToComments(
+  postId: string,
+  callback: (comments: Comment[]) => void,
+  onError?: (err: Error) => void,
+) {
   const q = query(
     collection(getFirebaseDb(), "comments"),
     where("postId", "==", postId),
     orderBy("createdAt", "asc")
   );
   return onSnapshot(q, (snap) => {
-    const comments = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Comment));
+    const comments = snap.docs.map((d) => {
+      const data = d.data();
+      return { ...data, id: d.id, createdAt: toMillis(data.createdAt) } as Comment;
+    });
     callback(comments);
-  }, snapshotErrorHandler("comments"));
+  }, (error) => {
+    console.warn("[Firestore] comments listener error:", error.message);
+    if (onError) onError(error);
+  });
 }
 
 export async function deleteComment(commentId: string, postId: string) {

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Post, Comment, POST_PREVIEW_WORDS } from "@/types";
 import { toggleLike, deletePost, createPost, addComment, subscribeToComments, deleteComment, hasUserReposted } from "@/lib/firestore";
 import { useAuthStore } from "@/store/authStore";
-import { formatDistanceToNow } from "date-fns";
+import { formatTimestamp } from "@/lib/formatTime";
 import {
   HiHeart,
   HiOutlineHeart,
@@ -43,6 +43,7 @@ export default function PostCard({ post }: PostCardProps) {
   const [reposted, setReposted] = useState(false);
   const [reposting, setReposting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [commentLoadError, setCommentLoadError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const liked = user ? post.likes?.includes(user.uid) : false;
@@ -54,7 +55,12 @@ export default function PostCard({ post }: PostCardProps) {
 
   useEffect(() => {
     if (!showComments) return;
-    const unsub = subscribeToComments(post.id, setComments);
+    setCommentLoadError(false);
+    const unsub = subscribeToComments(
+      post.id,
+      setComments,
+      () => setCommentLoadError(true),
+    );
     return () => unsub();
   }, [showComments, post.id]);
 
@@ -183,7 +189,7 @@ export default function PostCard({ post }: PostCardProps) {
               </div>
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span className="text-gray-400 text-[11px]">
-                  {formatDistanceToNow(post.createdAt, { addSuffix: true })}
+                  {formatTimestamp(post.createdAt)}
                 </span>
                 <span className="text-gray-300 text-[11px]">·</span>
                 {post.visibility === "global" ? (
@@ -312,7 +318,7 @@ export default function PostCard({ post }: PostCardProps) {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 ml-1">
                           <span className="text-gray-400 text-[10px]">
-                            {formatDistanceToNow(c.createdAt, { addSuffix: true })}
+                            {formatTimestamp(c.createdAt)}
                           </span>
                           {user?.uid === c.authorId && (
                             <button
@@ -329,7 +335,11 @@ export default function PostCard({ post }: PostCardProps) {
                 </div>
               )}
 
-              {comments.length === 0 && (
+              {commentLoadError && (
+                <p className="text-center text-red-500 text-xs py-2 bg-red-50 rounded-lg">Failed to load comments. Index may still be building.</p>
+              )}
+
+              {!commentLoadError && comments.length === 0 && (
                 <p className="text-center text-gray-400 text-xs py-2">No comments yet</p>
               )}
 

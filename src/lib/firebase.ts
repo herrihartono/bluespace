@@ -37,6 +37,10 @@ export function getFirebaseStorage(): FirebaseStorage {
 }
 
 export function getGoogleProvider(): GoogleAuthProvider {
-  if (!_googleProvider) _googleProvider = new GoogleAuthProvider();
+  if (!_googleProvider) {
+    _googleProvider = new GoogleAuthProvider();
+    _googleProvider.addScope("https://www.googleapis.com/auth/drive.file");
+    _googleProvider.addScope("https://www.googleapis.com/auth/spreadsheets");
+  }
   return _googleProvider;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 import { getFirebaseAuth, getGoogleProvider } from "@/lib/firebase";
 import { createUserProfile, getUserProfile } from "@/lib/firestore";
 import { useAuthStore } from "@/store/authStore";
@@ -8,6 +8,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FcGoogle } from "react-icons/fc";
 import { HiChatBubbleLeftRight } from "react-icons/hi2";
+
+function cacheGoogleToken(token: string) {
+  try {
+    useAuthStore.getState().setGoogleAccessToken(token);
+    localStorage.setItem("gat", token);
+    localStorage.setItem("gat_exp", String(Date.now() + 55 * 60 * 1000));
+  } catch {}
+}
 
 export default function LoginPage() {
   const setUser = useAuthStore((s) => s.setUser);
@@ -19,6 +27,9 @@ export default function LoginPage() {
       .then(async (result) => {
         if (result?.user) {
           const { uid, email, displayName, photoURL } = result.user;
+          const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+          if (token) cacheGoogleToken(token);
+
           let profile = await getUserProfile(uid);
           if (!profile) {
             profile = {
@@ -45,6 +56,8 @@ export default function LoginPage() {
     try {
       const result = await signInWithPopup(getFirebaseAuth(), getGoogleProvider());
       const { uid, email, displayName, photoURL } = result.user;
+      const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+      if (token) cacheGoogleToken(token);
 
       let profile = await getUserProfile(uid);
       if (!profile) {

@@ -11,6 +11,7 @@ import { formatTimestamp } from "@/lib/formatTime";
 export default function ChatListPage() {
   const user = useAuthStore((s) => s.user);
   const [chats, setChats] = useState<Chat[]>([]);
+  const [loadingChats, setLoadingChats] = useState(true);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState("");
@@ -20,7 +21,11 @@ export default function ChatListPage() {
 
   useEffect(() => {
     if (!user) return;
-    const unsub = subscribeToChats(user.uid, setChats);
+    setLoadingChats(true);
+    const unsub = subscribeToChats(user.uid, (data) => {
+      setChats(data);
+      setLoadingChats(false);
+    });
     return () => unsub();
   }, [user]);
 
@@ -96,7 +101,11 @@ export default function ChatListPage() {
         </button>
       </div>
 
-      {chats.length === 0 ? (
+      {loadingChats ? (
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+        </div>
+      ) : chats.length === 0 ? (
         <div className="text-center py-16">
           <div className="text-5xl mb-4">💬</div>
           <h3 className="text-lg font-semibold text-gray-600">No messages yet</h3>

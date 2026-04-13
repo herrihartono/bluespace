@@ -4,9 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { subscribeToMessages, sendMessage, markChatRead, setTypingStatus, subscribeToChatDoc } from "@/lib/firestore";
+import { backupChatHistory } from "@/lib/drive";
 import { Message, Chat, PendingMessage, MAX_MESSAGE_LENGTH } from "@/types";
 import { formatTimestamp, formatChatDate, isSameDay } from "@/lib/formatTime";
-import { HiArrowLeft, HiPaperAirplane, HiUserGroup, HiExclamationCircle, HiArrowPath } from "react-icons/hi2";
+import { HiArrowLeft, HiPaperAirplane, HiUserGroup, HiExclamationCircle, HiArrowPath, HiArrowUpTray } from "react-icons/hi2";
 import { v4 as uuidv4 } from "uuid";
 
 const TYPING_DEBOUNCE = 2000;
@@ -39,6 +40,9 @@ export default function ChatRoomPage() {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<{ url: string; error?: string } | null>(null);
+  const googleAccessToken = useAuthStore((s) => s.googleAccessToken);
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -205,6 +209,23 @@ export default function ChatRoomPage() {
     }
   };
 
+  const handleExportToSheets = async () => {
+    if (!googleAccessToken) {
+      setExportResult({ url: "", error: "Sign out and back in to enable Google Sheets export." });
+      return;
+    }
+    setExporting(true);
+    setExportResult(null);
+    try {
+      const title = getChatTitle();
+      const url = await backupChatHistory(chatId, title, messages, googleAccessToken);
+      setExportResult({ url });
+    } catch (err: any) {
+      setExportResult({ url: "", error: err?.message || "Export failed." });
+    }
+    setExporting(false);
+  };
+
   const getChatTitle = () => {
     if (!chat || !user) return "Chat";
     if (chat.type === "group") return chat.name;
@@ -263,7 +284,7 @@ export default function ChatRoomPage() {
             <span className="text-blue-600 font-semibold text-sm">{getChatTitle()?.[0]?.toUpperCase()}</span>
           )}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-gray-900 text-sm truncate">{getChatTitle()}</h2>
           {typingUsers.length > 0 ? (
             <p className="text-xs text-blue-500 animate-pulse">{typingUsers.join(", ")} typing...</p>
@@ -271,7 +292,32 @@ export default function ChatRoomPage() {
             <p className="text-xs text-gray-400">{chat.members.length} members</p>
           ) : null}
         </div>
+        <button
+          onClick={handleExportToSheets}
+          disabled={exporting || messages.length === 0}
+          title="Export chat history to Google Sheets"
+          className="p-2 rounded-full hover:bg-green-50 text-gray-400 hover:text-green-600 disabled:opacity-40 transition-colors shrink-0"
+        >
+          {exporting ? (
+            <div className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+          ) : (
+            <HiArrowUpTray className="w-5 h-5" />
+          )}
+        </button>
       </div>
+
+      {exportResult && (
+        <div className={`px-3 py-2 text-xs rounded-xl text-center ${exportResult.error ? "bg-red-50 text-red-600" : "bg-green-50 text-green-700"}`}>
+          {exportResult.error ? exportResult.error : (
+            <>
+              Exported to Sheets!{" "}
+              <a href={exportResult.url} target="_blank" rel="noreferrer" className="underline font-semibold">
+                Open spreadsheet
+              </a>
+            </>
+          )}
+        </div>
+      )}
 
       <div
         ref={containerRef}
